@@ -1,13 +1,17 @@
+from pathlib import Path
+from typing import Literal
 from urllib.parse import urlsplit, urlunsplit
 
-from pydantic import Field, SecretStr, field_validator
+from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from sqlalchemy.engine import make_url
 
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     database_url: str = "sqlite:///./data/adrobot.db"
+    keitaro_mode: Literal["live", "demo"] = "live"
     keitaro_base_url: str = "https://tlgk.host"
     keitaro_api_key: SecretStr = SecretStr("")
     campaign_prefix: str = "test_borkoev_"
@@ -28,7 +32,17 @@ class Settings(BaseSettings):
             or parts.path.rstrip("/") not in {"", "/admin_api/v1"}
         ):
             raise ValueError("Use a Keitaro origin or /admin_api/v1 URL without credentials")
-        return urlunsplit((parts.scheme, parts.netloc, "/admin_api/v1", "", ""))
+        return urlunsplit((parts.scheme, parts.netloc.lower(), "/admin_api/v1", "", ""))
+
+    @model_validator(mode="after")
+    def isolate_demo_database(self):
+        parsed = make_url(self.database_url)
+        if self.keitaro_mode == "demo" and parsed.database and parsed.database != ":memory:":
+            path = Path(parsed.database)
+            if not path.stem.endswith("-demo"):
+                path = path.with_name(path.stem + "-demo" + path.suffix)
+                self.database_url = str(parsed.set(database=str(path)))
+        return self
 
     @field_validator("campaign_prefix")
     @classmethod

@@ -20,4 +20,9 @@ describe('API boundary', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ detail: [{ loc: ['body', 'country_code'], msg: 'Invalid country' }] }), { status: 422 })));
     await expect(api('/campaigns')).rejects.toThrow('country_code: Invalid country');
   });
+
+  it('keeps the unknown outcome, operation and correlation ID for safe recovery', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ detail: 'Lost response', code: 'OPERATION_RECONCILIATION_REQUIRED', operation_id: 'operation-1', outcome: 'unknown' }), { status: 502, headers: { 'X-Request-ID': 'request-1' } })));
+    await expect(api('/campaigns')).rejects.toMatchObject({ operationId: 'operation-1', requestId: 'request-1', outcome: 'unknown', code: 'OPERATION_RECONCILIATION_REQUIRED' });
+  });
 });

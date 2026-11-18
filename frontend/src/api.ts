@@ -5,6 +5,20 @@ export type Catalogs = {
   groups: Option[];
   sources: Option[];
   campaign_prefix: string;
+  mode: 'live' | 'demo';
+};
+
+export type Operation = {
+  id: string;
+  kind: 'create_campaign' | 'publish_stream';
+  status: 'pending' | 'uncertain' | 'succeeded' | 'failed' | 'conflict';
+  phase: string;
+  campaign_id: number | null;
+  stream_id: number | null;
+  detail: string | null;
+  error_code: string | null;
+  created_at: string;
+  updated_at: string;
 };
 
 export type StreamOffer = Option & { weight: number; pinned: boolean; removed: boolean };
@@ -19,12 +33,21 @@ export type Stream = {
   offers: StreamOffer[];
   total_weight: number;
   synced_at: string | null;
+  published_offers: StreamOffer[];
+  operation: Operation | null;
 };
 
 export type Campaign = Option & { tracking_url: string | null; streams: Stream[] };
 
 export class ApiError extends Error {
-  constructor(public status: number, message: string) {
+  constructor(
+    public status: number,
+    message: string,
+    public code = 'REQUEST_FAILED',
+    public operationId: string | null = null,
+    public outcome: 'not_applied' | 'unknown' | 'applied' | null = null,
+    public requestId: string | null = null,
+  ) {
     super(message);
     this.name = 'ApiError';
   }
@@ -51,13 +74,25 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
   if (external?.aborted) abort();
   external?.addEventListener('abort', abort, { once: true });
   try {
+    const headers = new Headers(options.headers);
+    if (options.body && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
     const response = await fetch(`/api${path}`, {
       ...options,
       signal: controller.signal,
-      headers: { ...(options.body ? { 'Content-Type': 'application/json' } : {}), ...options.headers },
+      headers,
     });
     const data: unknown = await response.json().catch(() => null);
-    if (!response.ok) throw new ApiError(response.status, errorText(data));
+    if (!response.ok) {
+      const envelope = data && typeof data === 'object' ? data as Record<string, unknown> : {};
+      throw new ApiError(
+        response.status,
+        errorText(data),
+        typeof envelope.code === 'string' ? envelope.code : 'REQUEST_FAILED',
+        typeof envelope.operation_id === 'string' ? envelope.operation_id : response.headers.get('X-Operation-ID'),
+        ['not_applied', 'unknown', 'applied'].includes(String(envelope.outcome)) ? envelope.outcome as ApiError['outcome'] : null,
+        response.headers.get('X-Request-ID'),
+      );
+    }
     return data as T;
   } catch (error) {
     if (external?.aborted) throw new DOMException('Aborted', 'AbortError');
@@ -70,8 +105,8 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
   }
 }
 
-export function send<T>(path: string, body: unknown, method = 'POST') {
-  return api<T>(path, { method, body: JSON.stringify(body) });
+export function send<T>(path: string, body: unknown, method = 'POST', idempotencyKey?: string) {
+  return api<T>(path, { method, body: JSON.stringify(body), headers: idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : undefined });
 }
 
 export function messageOf(error: unknown): string {

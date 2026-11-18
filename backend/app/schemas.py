@@ -1,4 +1,4 @@
-from typing import Annotated
+from typing import Annotated, Literal
 
 import pycountry
 from pydantic import BaseModel, ConfigDict, Field, StrictInt, field_validator, model_validator
@@ -17,6 +17,10 @@ class VersionInput(InputModel):
 
 class FetchInput(InputModel):
     discard_draft: bool = False
+
+
+class DemoFault(InputModel):
+    kind: Literal["publish_timeout", "create_timeout"]
 
 
 class CreateCampaign(InputModel):
@@ -77,6 +81,19 @@ class StreamOfferView(CatalogItem):
     removed: bool
 
 
+class OperationView(BaseModel):
+    id: str
+    kind: Literal["create_campaign", "publish_stream"]
+    status: Literal["pending", "uncertain", "succeeded", "failed", "conflict"]
+    phase: str
+    campaign_id: int | None
+    stream_id: int | None
+    detail: str | None
+    error_code: str | None
+    created_at: str
+    updated_at: str
+
+
 class StreamView(BaseModel):
     id: int
     campaign_id: int
@@ -85,6 +102,8 @@ class StreamView(BaseModel):
     dirty: bool
     version: int
     offers: list[StreamOfferView]
+    published_offers: list[StreamOfferView]
+    operation: OperationView | None
     total_weight: int
     synced_at: str | None
 

@@ -58,7 +58,7 @@ export function OfferPicker({ label, value, onChange, disabled = false, excludeI
       aria-autocomplete="list"
       aria-expanded={open && !value}
       aria-controls={`${id}-list`}
-      aria-activedescendant={active >= 0 && visible[active] ? `${id}-${visible[active].id}` : undefined}
+      aria-activedescendant={open && !value && active >= 0 && visible[active] ? `${id}-${visible[active].id}` : undefined}
       placeholder="ID или название оффера"
       value={value ? `#${value.id} · ${value.name}` : query}
       disabled={disabled}
@@ -76,10 +76,8 @@ export function OfferPicker({ label, value, onChange, disabled = false, excludeI
     {value ? <button className="picker-clear" type="button" disabled={disabled} onClick={() => { onChange(null); setQuery(''); setOpen(true); }}>Сменить</button> : null}
     {open && !value ? <div className="offer-results">
       <ul id={`${id}-list`} role="listbox" aria-label={label} aria-busy={loading}>
-        {visible.map((item, index) => <li key={item.id} id={`${id}-${item.id}`} role="option" aria-selected={active === index}>
-          <button type="button" tabIndex={-1} onMouseDown={(event) => event.preventDefault()} onClick={() => choose(item)}>
-            <span className="mono">#{item.id}</span><span>{item.name}</span>
-          </button>
+        {visible.map((item, index) => <li key={item.id} id={`${id}-${item.id}`} role="option" aria-selected={active === index} onMouseDown={(event) => event.preventDefault()} onClick={() => choose(item)}>
+          <span className="mono">#{item.id}</span><span>{item.name}</span>
         </li>)}
       </ul>
       {loading ? <p role="status">Ищем офферы…</p> : null}

@@ -4,14 +4,15 @@ import httpx
 
 from app.config import Settings
 from app.deadline import remaining_timeout
+from app.errors import AppError
 
 
-class UpstreamError(Exception):
-    def __init__(self, status: int, message: str, ambiguous: bool = False):
-        self.status = status
-        self.message = message
+class UpstreamError(AppError):
+    def __init__(
+        self, status: int, message: str, ambiguous: bool = False, code: str = "UPSTREAM_REJECTED"
+    ):
         self.ambiguous = ambiguous
-        super().__init__(message)
+        super().__init__(status, code, message, outcome="unknown" if ambiguous else "not_applied")
 
 
 class KeitaroClient:
@@ -32,25 +33,39 @@ class KeitaroClient:
 
     def request(self, method: str, path: str, payload: dict | None = None) -> Any:
         if not self.configured:
-            raise UpstreamError(503, "Keitaro API key is not configured on the server")
+            raise UpstreamError(
+                503,
+                "Keitaro API key is not configured on the server",
+                code="UPSTREAM_NOT_CONFIGURED",
+            )
         writing = method not in {"GET", "HEAD"}
         timeout = remaining_timeout(self.per_call_timeout)
         if timeout <= 0:
-            raise UpstreamError(504, "The Keitaro operation time limit was reached")
+            raise UpstreamError(
+                504, "The Keitaro operation time limit was reached", code="UPSTREAM_DEADLINE"
+            )
         try:
             response = self.client.request(method, path.lstrip("/"), json=payload, timeout=timeout)
         except httpx.TimeoutException as error:
             suffix = "; check Keitaro before retrying this write" if writing else ""
-            raise UpstreamError(504, "Keitaro request timed out" + suffix, writing) from error
+            raise UpstreamError(
+                504, "Keitaro request timed out" + suffix, writing, "UPSTREAM_TIMEOUT"
+            ) from error
         except httpx.RequestError as error:
             suffix = "; check Keitaro before retrying this write" if writing else ""
-            raise UpstreamError(502, "Keitaro connection failed" + suffix, writing) from error
+            raise UpstreamError(
+                502, "Keitaro connection failed" + suffix, writing, "UPSTREAM_UNAVAILABLE"
+            ) from error
         if response.status_code >= 400:
             if response.status_code == 404:
-                raise UpstreamError(404, "The requested entity was not found in Keitaro")
+                raise UpstreamError(
+                    404, "The requested entity was not found in Keitaro", code="UPSTREAM_NOT_FOUND"
+                )
             if response.status_code in {401, 403}:
                 raise UpstreamError(
-                    502, "Keitaro rejected the server API credentials or permissions"
+                    502,
+                    "Keitaro rejected the server API credentials or permissions",
+                    code="UPSTREAM_AUTH",
                 )
             raise UpstreamError(
                 502,
@@ -62,7 +77,9 @@ class KeitaroClient:
         try:
             return response.json()
         except ValueError as error:
-            raise UpstreamError(502, "Keitaro returned an invalid response", writing) from error
+            raise UpstreamError(
+                502, "Keitaro returned an invalid response", writing, "UPSTREAM_INVALID_RESPONSE"
+            ) from error
 
     def get(self, path: str):
         return self.request("GET", path)

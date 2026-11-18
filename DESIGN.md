@@ -21,3 +21,7 @@ Desktop uses a 300px campaign sidebar and a fluid editor. Below760px the sidebar
 ## Scope
 
 Operate mode, code-first. Product truth comes from the supplied assignment and reference video. No invented performance metrics, charts or claims. Design research informed density and accessibility; catalog marketing patterns were not applied to this application.
+
+## Operation recovery
+
+Draft changes are previewed against the published snapshot before the action row. Pending publication replaces the publish action with result verification and blocks edits. The operation journal uses flat rows with explicit outcome labels and request references. Demo controls are collapsed by default and only appear in demo mode. Existing tokens, typography and responsive structure remain authoritative.

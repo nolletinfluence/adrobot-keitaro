@@ -24,7 +24,7 @@ Local application connected to a remote Keitaro Admin API. Campaign names use te
 
 ## Capabilities and Constraints
 
-Campaign creation includes domain, group and traffic source. Editor imports all streams, treats non-offer streams as opaque, persists drafts, archives removed associations, restores offers, synchronizes external deletions and fixes pinned shares while distributing the remainder to total 100 percent. The reference video governs these behaviors.
+Campaign creation includes domain, group and traffic source. Editor imports all streams, treats non-offer streams as opaque, persists drafts, archives removed associations, restores offers, synchronizes external deletions and fixes pinned shares while distributing the remainder to total 100 percent. The reference video governs these behaviors. Durable operation intents, idempotency keys and read-only reconciliation protect remote writes after lost responses. An explicit offline demo provides four offers and a reproducible applied-then-timeout scenario. Demo and live state are isolated.
 
 ## Evidence on Hand
 

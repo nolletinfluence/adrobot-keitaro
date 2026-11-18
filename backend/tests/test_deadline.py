@@ -7,7 +7,7 @@ from app.config import Settings
 from app.keitaro import KeitaroClient, UpstreamError
 
 
-def test_sequential_requests_share_an_absolute_deadline(monkeypatch):
+def test_sequential_requests_share_one_operation_budget(monkeypatch):
     clock = [10.0]
     timeouts = []
     monkeypatch.setattr(deadline, "monotonic", lambda: clock[0])

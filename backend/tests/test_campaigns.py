@@ -242,7 +242,7 @@ def test_offer_search_is_filtered_and_bounded(system):
     assert client.get("/api/offers?limit=101").status_code == 422
 
 
-def test_catalog_refresh_and_offer_add_serialize_database_sessions(system):
+def test_slow_remote_catalog_does_not_block_unrelated_database_work(system):
     client, remote, _application = system
     stream = fetch(client)
     catalog_entered = Event()
@@ -266,10 +266,11 @@ def test_catalog_refresh_and_offer_add_serialize_database_sessions(system):
             json={"version": stream["version"], "offer_id": 12},
         )
         try:
-            assert not offer_add_entered.wait(timeout=0.1)
+            assert offer_add_entered.wait(timeout=2)
+            response = add_result.result(timeout=2)
+            assert response.status_code == 200, response.text
+            assert client.get("/api/campaigns/101").status_code == 200
         finally:
             release_catalog.set()
         assert catalog_result.result(timeout=5).status_code == 200
-        response = add_result.result(timeout=5)
-        assert response.status_code == 200, response.text
     assert weights(response.json()) == {11: 50, 12: 50}

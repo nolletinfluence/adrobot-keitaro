@@ -54,9 +54,32 @@ class FakeKeitaro:
         }
         self.calls = []
         self.failure = None
+        self.after_failure = None
         self.before_request = None
+        self.after_request = None
+        self.reverse_offer_responses = False
 
     def handle(self, request: httpx.Request):
+        response = self._handle(request)
+        path = request.url.path.removeprefix("/admin_api/v1/")
+        if self.after_request:
+            self.after_request(request.method, path, response)
+        if self.after_failure and (request.method, path) == self.after_failure[:2]:
+            failure = self.after_failure
+            self.after_failure = None
+            if failure[2] == "timeout":
+                raise httpx.ReadTimeout("response lost after applying write", request=request)
+            return httpx.Response(failure[2], json={"error": "response lost after applying write"})
+        if self.reverse_offer_responses and response.is_success and response.content:
+            value = response.json()
+            rows = value if isinstance(value, list) else [value]
+            for row in rows:
+                if isinstance(row, dict) and "offers" in row:
+                    row["offers"] = list(reversed(row["offers"]))
+            response = httpx.Response(response.status_code, json=value)
+        return response
+
+    def _handle(self, request: httpx.Request):
         import json
 
         assert request.headers["Api-Key"] == "test-key"
@@ -128,6 +151,7 @@ class FakeKeitaro:
 def system(tmp_path, monkeypatch):
     database_url = f"sqlite:///{tmp_path / 'adrobot.db'}"
     monkeypatch.setenv("DATABASE_URL", database_url)
+    monkeypatch.setenv("KEITARO_MODE", "live")
     config = Config(str(Path(__file__).parents[1] / "alembic.ini"))
     command.upgrade(config, "head")
     settings = Settings(
